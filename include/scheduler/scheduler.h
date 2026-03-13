@@ -11,14 +11,15 @@ typedef struct {
     int arrival_time;
     int burst_time;
     int remaining_time;
-    int start_time;         // Time it first started executing (could be same as first_response_time)
+    int start_time;       // When the process first gets CPU time
     int finish_time;
     int first_response_time;
     int current_queue;
-    int has_started;      // flag para saber si ya tuvo su primera respuesta
+    int has_started;      // Just a flag to check if the process has been picked up yet
+    int time_in_queue;    // Keeps track of the quantum used, so it doesn't reset when preempted
 } Process;
 
-// Function signatures
+// Main process loop for our simulator
 void run_scheduler(Process *processes, int num_processes);
 
 #endif

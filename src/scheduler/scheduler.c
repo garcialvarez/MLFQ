@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include "../../include/scheduler/scheduler.h"
 
-// Constantes y Estructuras locales
+// Some local constants and our queue structure
 #define MAX_QUEUE_SIZE 100
 
 typedef struct {
@@ -50,14 +50,14 @@ void run_scheduler(Process *processes, int num_processes) {
     current_time = 0;
     
     Process *current_process = NULL;
-    int time_in_queue = 0; 
+    // At this point, time_in_queue is handled inside the Process struct, keeping it safe during preemptions.
 
     printf("\n=======================================================\n");
     printf("              INICIANDO SIMULACION MLFQ                \n");
     printf("=======================================================\n");
 
     while (completed < num_processes) {
-        // 1. Arrival of new processes
+        // Step 1: Check if any new processes just arrived
         for (int i = 0; i < num_processes; i++) {
             if (processes[i].arrival_time == current_time) {
                 processes[i].current_queue = 0; 
@@ -66,38 +66,58 @@ void run_scheduler(Process *processes, int num_processes) {
             }
         }
 
-        // 2. Priority Boost (cada S=20 ciclos enteros)
+        // Step 2: Time for a priority boost? (Every 20 cycles we move everyone up to Q0)
         if (current_time > 0 && current_time % BOOST_PERIOD == 0) {
             printf("[Ciclo %3d] *** PRIORITY BOOST ***: Todos los procesos se mueven a Q0\n", current_time);
             
             if (current_process != NULL) {
                 current_process->current_queue = 0;
+                current_process->time_in_queue = 0;
                 enqueue(&q0, current_process);
                 current_process = NULL;
-                time_in_queue = 0;
             }
             
             while (q1.count > 0) {
                 Process *p = dequeue(&q1);
                 p->current_queue = 0;
+                p->time_in_queue = 0;
                 enqueue(&q0, p);
             }
             while (q2.count > 0) {
                 Process *p = dequeue(&q2);
                 p->current_queue = 0;
+                p->time_in_queue = 0;
                 enqueue(&q0, p);
             }
         }
 
-        // 3. Selección y Preemption
+        // Step 3: Deal with preemption and pick the next process to run
+        if (current_process != NULL) {
+            int should_preempt = 0;
+            if (current_process->current_queue == 1 && q0.count > 0) should_preempt = 1;
+            if (current_process->current_queue == 2 && (q0.count > 0 || q1.count > 0)) should_preempt = 1;
+            
+            if (should_preempt) {
+                printf("[Ciclo %3d] -> P%d INTERRUMPIDO por proceso de mayor prioridad. Retorna a Q%d (sin democion).\n", 
+                    current_time, current_process->pid, current_process->current_queue);
+                
+                // Just putting it back in its current queue, no penalty here
+                if (current_process->current_queue == 0) enqueue(&q0, current_process);
+                else if (current_process->current_queue == 1) enqueue(&q1, current_process);
+                else enqueue(&q2, current_process);
+                
+                current_process = NULL;
+                // Note: We don't reset the quantum here, time_in_queue handles it naturally
+            }
+        }
+
         if (current_process == NULL) {
             if (q0.count > 0) current_process = dequeue(&q0);
             else if (q1.count > 0) current_process = dequeue(&q1);
             else if (q2.count > 0) current_process = dequeue(&q2);
-            time_in_queue = 0; 
         }
 
-        // 4. Ejecución
+        // Step 4: Actually execute the chosen process for this cycle
         if (current_process != NULL) {
             if (!current_process->has_started) {
                 current_process->has_started = 1;
@@ -109,20 +129,19 @@ void run_scheduler(Process *processes, int num_processes) {
                 current_time, current_process->pid, current_process->current_queue, current_process->remaining_time);
 
             current_process->remaining_time--;
-            time_in_queue++;
+            current_process->time_in_queue++;
 
             if (current_process->remaining_time == 0) {
                 current_process->finish_time = current_time + 1; 
                 printf("[Ciclo %3d] -> P%d COMPLETO su ejecucion.\n", current_time + 1, current_process->pid);
                 completed++;
                 current_process = NULL;
-                time_in_queue = 0;
             } else {
                 int current_q_quantum = (current_process->current_queue == 0) ? q0.quantum : 
                                         (current_process->current_queue == 1) ? q1.quantum : q2.quantum;
 
-                if (time_in_queue >= current_q_quantum) {
-                    // Democion
+                if (current_process->time_in_queue >= current_q_quantum) {
+                    // Time's up for this quantum! Let's demote it if possible.
                     if (current_process->current_queue < 2) {
                         current_process->current_queue++;
                         printf("[Ciclo %3d] -> P%d AGOTO quantum (Q%d). DEMOVIDO a Q%d.\n", 
@@ -132,36 +151,20 @@ void run_scheduler(Process *processes, int num_processes) {
                             current_time + 1, current_process->pid);
                     }
                     
+                    current_process->time_in_queue = 0;
+                    
                     if (current_process->current_queue == 0) enqueue(&q0, current_process);
                     else if (current_process->current_queue == 1) enqueue(&q1, current_process);
                     else enqueue(&q2, current_process);
                     
                     current_process = NULL;
-                    time_in_queue = 0;
-                } else {
-                    int should_preempt = 0;
-                    if (current_process->current_queue == 1 && q0.count > 0) should_preempt = 1;
-                    if (current_process->current_queue == 2 && (q0.count > 0 || q1.count > 0)) should_preempt = 1;
-                    
-                    if (should_preempt) {
-                        printf("[Ciclo %3d] -> P%d INTERRUMPIDO por proceso de mayor prioridad. Retorna a Q%d (sin democion).\n", 
-                            current_time + 1, current_process->pid, current_process->current_queue);
-                        
-                        // No demotion if preempted
-                        if (current_process->current_queue == 0) enqueue(&q0, current_process);
-                        else if (current_process->current_queue == 1) enqueue(&q1, current_process);
-                        else enqueue(&q2, current_process);
-                        
-                        current_process = NULL;
-                        time_in_queue = 0;
-                    }
                 }
             }
         } else {
             printf("[Ciclo %3d] CPU IDLE\n", current_time);
         }
 
-        current_time++; // Fin de ciclo discreto
+        current_time++; // Tick the clock for the next cycle
     }
     
     printf("\n=======================================================\n");

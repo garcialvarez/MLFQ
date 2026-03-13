@@ -32,7 +32,7 @@ void export_results_csv(Process *processes, int num_processes, const char *filen
         return;
     }
     
-    // Header for CSV
+    // This is the header row for our CSV file
     fprintf(f, "PID,Arrival,Burst,Start,Finish,Response,Turnaround,Waiting\n");
     
     for (int i = 0; i < num_processes; i++) {
@@ -40,11 +40,11 @@ void export_results_csv(Process *processes, int num_processes, const char *filen
         int turnaround_time = processes[i].finish_time - processes[i].arrival_time;
         int waiting_time = turnaround_time - processes[i].burst_time;
         
-        fprintf(f, "%d,%d,%d,%d,%d,%d,%d,%d\n",
+        fprintf(f, "P%d,%d,%d,%d,%d,%d,%d,%d\n",
             processes[i].pid,
             processes[i].arrival_time,
             processes[i].burst_time,
-            processes[i].first_response_time, // Using start time
+            processes[i].first_response_time, // We're using first_response_time for the "Start" metric here
             processes[i].finish_time,
             response_time,
             turnaround_time,

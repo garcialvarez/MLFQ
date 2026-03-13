@@ -3,10 +3,10 @@
 
 #include "../scheduler/scheduler.h"
 
-// Imprime la tabla de metricas en consola
+// Prints the final metrics to the console so we can see how the processes did
 void print_metrics_table(Process *processes, int num_processes);
 
-// Exporta los resultados a un archivo CSV
+// Dumps our results into a CSV file
 void export_results_csv(Process *processes, int num_processes, const char *filename);
 
 #endif
